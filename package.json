@@ -1,0 +1,32 @@
+{
+  "name": "life-game",
+  "version": "0.1.0",
+  "description": "Conway's Game of Lifeを眺めて癒やされる、生態系ビューアWebアプリケーション",
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"開発サーバーコマンドを設定してください\"",
+    "build": "echo \"ビルドコマンドを設定してください\"",
+    "preview": "echo \"プレビューコマンドを設定してください\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivgtr/life-game.git"
+  },
+  "keywords": [
+    "conway-game-of-life",
+    "cellular-automaton",
+    "life-game",
+    "visualization",
+    "ecosystem",
+    "ambient",
+    "pixi.js",
+    "svelte"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ivgtr/life-game/issues"
+  },
+  "homepage": "https://github.com/ivgtr/life-game#readme"
+}
