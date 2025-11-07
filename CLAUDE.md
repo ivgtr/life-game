@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 このプロジェクトは「ライフゲーム観賞・生態系ビューア」Webサイトです。Conway's Game of Lifeを眺めて癒やされる体験を提供するSPA（Single Page Application）です。
 
 ### コンセプト
+
 - ライフゲームのセルの動きを「生態系」「小さな宇宙」として鑑賞する
 - 積極的な操作なしに、ボーッと眺めていられる"癒やし系"体験
 - シンプルで没入感のあるデザイン
@@ -23,6 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## アーキテクチャの重要な設計方針
 
 ### 責務の分離
+
 1. **ライフゲームコアロジック**
    - 描画レイヤーから完全に独立した純粋ロジック
    - `LifeGrid`, `LifeEngine`などのクラス/関数群
@@ -42,6 +44,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - Svelte storeの変更とPixi描画の同期設計
 
 ### ディレクトリ構成（予定）
+
 ```
 src/
   lib/
@@ -56,24 +59,29 @@ src/
 ## コア機能要件
 
 ### ライフゲーム基本
+
 - Conway's Game of Lifeルール
 - グリッドサイズ: PC 80-150×50-100、スマホは自動調整
 - トーラス（端ループ）実装、オプションで切替可能
 
 ### 観賞モード
+
 - ページ表示と同時に自動シミュレーション開始
 - ランダムシード/プリセット自動切替の「おまかせ観賞モード」
 - シーン切替時のフェード・ズームトランジション
 
 ### シーンプリセット（"生態系"テーマ）
+
 例: Forest（緑系）、Ocean（青系）、Nebula（紫-ピンク）、City Lights、Desert
 
 各プリセット：
+
 - 初期配置生成アルゴリズム
 - カラーパレット（背景、死細胞、生細胞、フェード色）
 - シミュレーション速度、ズームパラメータ
 
 ### セル描画表現
+
 - 角を丸める、生死遷移のフェードアニメーション
 - 生存世代数に応じた色変化
 - 疑似パララックス表現（任意）
@@ -89,14 +97,17 @@ src/
 ## GitHub Pages デプロイ
 
 ### 想定フロー
+
 - `main`ブランチへのpush/PRマージ
 - GitHub Actionsで自動ビルド
 - `gh-pages`ブランチまたは`main`の`docs/`へデプロイ
 
 ### Vite設定
+
 - `base`設定でGitHub Pagesの公開パス対応（`https://<user>.github.io/<repo>/`）
 
 ### GitHub Actions構成案
+
 - `.github/workflows/deploy.yml`
 - 使用Action: `actions/checkout`, `actions/setup-node`, `peaceiris/actions-gh-pages`
 - キャッシュ戦略（`node_modules`）
@@ -105,18 +116,21 @@ src/
 ## 開発時の注意点
 
 ### コード品質
+
 - TypeScript strict設定を維持
 - ESLint / Prettier導入（Svelte用プラグイン含む）
 - ライフゲームロジックのユニットテスト必須
 - CI（GitHub Actions）で型エラー、Lintチェック
 
 ### "癒やし"体験を壊さないために
+
 - UIはうるさすぎない、控えめなデザイン
 - アニメーション遷移は穏やか
 - パフォーマンス低下による体験破綻を避ける
 - コントラスト比、色覚多様性への配慮
 
 ### 拡張性
+
 - プリセット追加しやすい構造
 - 音声機能、ギャラリー機能追加の余地
 - 将来的にWebWorker移行可能な設計
