@@ -27,6 +27,8 @@ export class LifeRenderer {
   private cellSize = 8
   private gridWidth = 0
   private gridHeight = 0
+  private offsetX = 0
+  private offsetY = 0
 
   constructor(canvas: HTMLCanvasElement, options: RendererOptions) {
     // PixiJS Application の初期化
@@ -80,11 +82,11 @@ export class LifeRenderer {
         const cell = grid[y]?.[x]
         const color = cell === 1 ? aliveCellColor : deadCellColor
 
-        // セルを描画（小さな角丸四角形）
+        // セルを描画（オフセットを適用して中央配置）
         this.graphics
           .rect(
-            x * this.cellSize + 0.5,
-            y * this.cellSize + 0.5,
+            this.offsetX + x * this.cellSize + 0.5,
+            this.offsetY + y * this.cellSize + 0.5,
             this.cellSize - 1,
             this.cellSize - 1
           )
@@ -100,11 +102,19 @@ export class LifeRenderer {
     const canvasWidth = this.app.canvas.width / (window.devicePixelRatio || 1)
     const canvasHeight = this.app.canvas.height / (window.devicePixelRatio || 1)
 
-    // キャンバスに収まるセルサイズを計算
+    // キャンバスに収まるセルサイズを計算（画面全体を使う）
     const cellWidth = canvasWidth / this.gridWidth
     const cellHeight = canvasHeight / this.gridHeight
 
-    this.cellSize = Math.min(cellWidth, cellHeight, 20) // 最大20px
+    this.cellSize = Math.min(cellWidth, cellHeight)
+
+    // グリッド全体のサイズを計算
+    const gridTotalWidth = this.gridWidth * this.cellSize
+    const gridTotalHeight = this.gridHeight * this.cellSize
+
+    // 中央配置のためのオフセットを計算
+    this.offsetX = (canvasWidth - gridTotalWidth) / 2
+    this.offsetY = (canvasHeight - gridTotalHeight) / 2
   }
 
   /**

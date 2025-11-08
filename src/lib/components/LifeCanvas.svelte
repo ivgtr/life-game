@@ -14,6 +14,14 @@
   const deadCellColor = 0x1a2a4f
 
   onMount(() => {
+    // 画面サイズに合わせたグリッドサイズを計算
+    const targetCellSize = 10 // 目標セルサイズ（px）
+    const gridWidth = Math.floor(window.innerWidth / targetCellSize)
+    const gridHeight = Math.floor(window.innerHeight / targetCellSize)
+
+    // グリッドサイズを更新
+    simulationStore.setGridSize({ width: gridWidth, height: gridHeight })
+
     // レンダラー初期化
     renderer = new LifeRenderer(canvasElement, {
       width: window.innerWidth,
@@ -27,6 +35,11 @@
     const handleResize = () => {
       if (renderer) {
         renderer.resize(window.innerWidth, window.innerHeight)
+
+        // グリッドサイズも再計算
+        const newGridWidth = Math.floor(window.innerWidth / targetCellSize)
+        const newGridHeight = Math.floor(window.innerHeight / targetCellSize)
+        simulationStore.setGridSize({ width: newGridWidth, height: newGridHeight })
       }
     }
     window.addEventListener('resize', handleResize)
