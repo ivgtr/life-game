@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import Canvas from '$lib/components/Canvas.svelte'
   import ControlBar from '$lib/components/ControlBar.svelte'
   import WordLog from '$lib/components/WordLog.svelte'
@@ -17,6 +18,7 @@
 
   let error = $state('')
   let ready = $state(false)
+  let loading = $state(true)
   let isPlaying = $state(true)
   let speed = $state(10)
   let stepCount = $state(0)
@@ -24,6 +26,7 @@
   let detectedWords = $state<DetectedWord[]>([])
 
   let canvasRef: Canvas | undefined = $state()
+  let containerRef: HTMLDivElement | undefined = $state()
 
   const currentTheme = $derived(allThemes[themeIndex]!)
   const rule = codepointRule
@@ -66,12 +69,78 @@
   function handleWordsDetected(words: DetectedWord[]): void {
     detectedWords = [...words, ...detectedWords].slice(0, MAX_WORD_LOG)
   }
+
+  function handleReady(): void {
+    ready = true
+    loading = false
+  }
+
+  function handleError(msg: string): void {
+    error = msg
+    loading = false
+  }
+
+  // キーボードショートカット
+  function handleKeydown(e: KeyboardEvent): void {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+    switch (e.code) {
+      case 'Space':
+        e.preventDefault()
+        handleTogglePlay()
+        break
+      case 'KeyF':
+        e.preventDefault()
+        toggleFullscreen()
+        break
+      case 'KeyR':
+        e.preventDefault()
+        handleReset()
+        break
+      case 'KeyT':
+        e.preventDefault()
+        themeIndex = (themeIndex + 1) % allThemes.length
+        break
+      case 'BracketRight':
+        e.preventDefault()
+        speed = Math.min(60, speed + 5)
+        break
+      case 'BracketLeft':
+        e.preventDefault()
+        speed = Math.max(1, speed - 5)
+        break
+    }
+  }
+
+  function toggleFullscreen(): void {
+    if (!containerRef) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      containerRef.requestFullscreen()
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('keydown', handleKeydown)
+    return () => window.removeEventListener('keydown', handleKeydown)
+  })
 </script>
 
 {#if error}
   <FallbackMessage message={error} />
 {:else}
-  <div class="relative h-screen w-screen overflow-hidden bg-neutral-950">
+  <div
+    bind:this={containerRef}
+    class="relative h-screen w-screen overflow-hidden bg-neutral-950"
+  >
+    {#if loading}
+      <div class="flex h-full w-full flex-col items-center justify-center gap-4">
+        <div class="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300"></div>
+        <p class="text-sm text-neutral-500">WebGPU を初期化中...</p>
+      </div>
+    {/if}
+
     <Canvas
       bind:this={canvasRef}
       gridWidth={GRID_WIDTH}
@@ -81,11 +150,12 @@
       mutationStrength={rule.mutationStrength}
       decaySteps={rule.decaySteps}
       theme={currentTheme.colors}
-      onReady={() => (ready = true)}
-      onError={(msg) => (error = msg)}
+      onReady={handleReady}
+      onError={handleError}
       onStep={(s) => (stepCount = s)}
       onWordsDetected={handleWordsDetected}
     />
+
     {#if ready}
       <WordLog words={detectedWords} />
       <ControlBar
@@ -103,6 +173,15 @@
         onSeedAozora={handleSeedAozora}
         onSeedCustom={handleSeedCustom}
       />
+
+      <!-- キーボードショートカットヒント -->
+      <div class="pointer-events-none absolute left-4 top-4 text-xs text-neutral-600 opacity-0 transition-opacity hover:opacity-100">
+        <p>Space: 再生/停止</p>
+        <p>F: フルスクリーン</p>
+        <p>R: リセット</p>
+        <p>T: テーマ切替</p>
+        <p>[ / ]: 速度調整</p>
+      </div>
     {/if}
   </div>
 {/if}

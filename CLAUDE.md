@@ -4,168 +4,118 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-このプロジェクトは「ライフゲーム観賞・生態系ビューア」Webサイトです。Conway's Game of Lifeを眺めて癒やされる体験を提供するSPA（Single Page Application）です。
+「ジェネラティブ文学ツール」— Conway's Game of Life のセルを日本語の文字に置き換えた、文字の生成・変異・崩壊を観賞するWebアプリケーション。セルオートマトンの規則に従って文字が生まれ、隣接セルの影響で変異し、死ぬときは徐々に崩壊していく。偶然形成された意味のある単語を検出・ハイライトする機能を持つ。
 
 ### コンセプト
 
-- ライフゲームのセルの動きを「生態系」「小さな宇宙」として鑑賞する
-- 積極的な操作なしに、ボーッと眺めていられる"癒やし系"体験
-- シンプルで没入感のあるデザイン
+- セルの生死をピクセルではなく日本語の文字（ひらがな・カタカナ）で表現
+- WebGPU Compute Shader で大規模グリッド（256×256+）を60fpsで並列処理
+- MSDF (Multi-channel Signed Distance Field) フォントレンダリングでGPU上でテキスト描画
+- 観賞モード: 眺めているだけで「言葉が生まれる瞬間」を体験できる
 
 ## 技術スタック
 
 - **言語**: TypeScript（strict設定）
-- **フレームワーク**: Svelte（Viteベース、またはSvelteKit + adapter-static）
-- **スタイリング**: Tailwind CSS
-- **描画**: PixiJS（キャンバス描画とアニメーション）
+- **フレームワーク**: Svelte 5（Vite 7ベース）、`$state` / `$props` / `$derived` runes使用
+- **スタイリング**: Tailwind CSS 4
+- **描画**: WebGPU（Compute Shader + Fragment Shader）、MSDF テキストレンダリング
+- **意味検出**: Web Worker でのバックグラウンド単語検出
 - **ホスティング**: GitHub Pages（静的ファイル配信）
-- **CI/CD**: GitHub Actions
 
-## アーキテクチャの重要な設計方針
+## アーキテクチャ
 
-### 責務の分離
-
-1. **ライフゲームコアロジック**
-   - 描画レイヤーから完全に独立した純粋ロジック
-   - `LifeGrid`, `LifeEngine`などのクラス/関数群
-   - 型定義: `CellState`, `Grid`, `SimulationSettings`, `PresetConfig`
-   - ビット演算やWebWorkerでの最適化余地を残す構造
-
-2. **状態管理（Svelte Store）**
-   - `simulationStore`: 再生/停止、速度、現在ステップ
-   - `presetStore`: 選択中プリセット、プリセット一覧
-   - `uiStore`: Zenモード、サウンドON/OFF
-   - コンポーネントが直接ロジックを持ちすぎないように設計
-
-3. **PixiJS統合**
-   - 専用コンポーネント（`<LifeCanvas />`等）で初期化
-   - `onMount`で初期化、`onDestroy`でリソース解放
-   - `requestAnimationFrame` / `Ticker`でレンダリングループ制御
-   - Svelte storeの変更とPixi描画の同期設計
-
-### ディレクトリ構成（予定）
+### ディレクトリ構成
 
 ```
 src/
   lib/
-    components/      # 再利用可能なUIコンポーネント
+    gpu/                         # WebGPU 関連
+      WebGPUContext.ts           # GPU初期化、Result型エラーハンドリング
+      BufferManager.ts           # ダブルバッファリング、uniform管理、GPU→CPU readback
+      ComputePipeline.ts         # Compute Pipeline（セルオートマトン計算）
+      RenderPipeline.ts          # Render Pipeline（MSDFテキスト描画）
+      shaders/
+        automaton.wgsl           # Conway B3/S23 + コードポイント変異 Compute Shader
+        text_render.wgsl         # MSDF Vertex + Fragment Shader
+    font/
+      MSDFAtlasManager.ts       # アトラス読み込み、グリフUVルックアップテーブル
+      atlas/                     # 生成済みMSDFアトラス（PNG + JSON）
     features/
-      lifegame/      # ライフゲーム関連ロジック・UI
-    stores/          # Svelte store（状態管理）
-    styles/          # Tailwindカスタム設定、共通スタイル
-    pixi/            # PixiJS関連ラッパ・初期化コード
+      automaton/
+        CharacterSet.ts          # ひらがな/カタカナ範囲定義、ランダム生成
+        rules/
+          MutationRule.ts        # 変異ルールインターフェース
+          CodepointRule.ts       # コードポイント演算ルール（3プリセット）
+      seed/
+        RandomSeed.ts            # ランダムシード生成
+        TextSeed.ts              # テキスト→グリッド変換
+        AozoraSeed.ts            # 青空文庫シード
+        aozora-texts/            # バンドルされた青空文庫テキスト
+      detection/
+        dictionary.ts            # 日本語ワードリスト
+        GridScanner.ts           # グリッド→テキストシーケンス抽出
+        WordDetector.ts          # 単語検出コーディネーター
+        detection.worker.ts      # Web Worker（バックグラウンド検出）
+      themes/
+        presets.ts               # 3テーマ定義（和紙墨流し、ターミナル、ミニマル）
+    stores/                      # Svelte stores
+    types/
+      cell.ts                    # セル型定義、CellFlags、GPU バッファレイアウト
+      theme.ts                   # テーマ型
+      seed.ts                    # シード型
+    components/
+      Canvas.svelte              # メインWebGPUキャンバス（アニメーションループ、パン/ズーム）
+      ControlBar.svelte          # 下部コントロールバー（ホバー表示）
+      WordLog.svelte             # 検出単語オーバーレイ
+      FallbackMessage.svelte     # WebGPU非対応メッセージ
+  App.svelte                     # ルートコンポーネント
 ```
 
-## コア機能要件
+### GPUバッファレイアウト
 
-### ライフゲーム基本
+セル1つ = 8バイト:
+- `codepoint` (u32): Unicode コードポイント。0 = 死セル
+- `gen_flags` (u32): 下位16ビット = generation（+32768バイアス）、上位16ビット = flags
 
-- Conway's Game of Lifeルール
-- グリッドサイズ: PC 80-150×50-100、スマホは自動調整
-- トーラス（端ループ）実装、オプションで切替可能
+### 描画パイプライン
 
-### 観賞モード
+1. **Compute Shader** (`automaton.wgsl`): ダブルバッファのping-pongでセル状態を更新
+2. **Render Pipeline** (`text_render.wgsl`): インスタンスレンダリング（6頂点×全セル）でMSDFテキスト描画
 
-- ページ表示と同時に自動シミュレーション開始
-- ランダムシード/プリセット自動切替の「おまかせ観賞モード」
-- シーン切替時のフェード・ズームトランジション
+## 開発コマンド
 
-### シーンプリセット（"生態系"テーマ）
+```bash
+yarn dev              # 開発サーバー起動
+yarn run check        # TypeScript + Svelte 型チェック（yarn check ではなく yarn run check）
+npx eslint src/       # ESLint
+yarn format           # Prettier 整形
+yarn generate-atlas   # MSDFフォントアトラス再生成
+```
 
-例: Forest（緑系）、Ocean（青系）、Nebula（紫-ピンク）、City Lights、Desert
+**注意**: `yarn check` は yarn の built-in コマンドが実行されるため、必ず `yarn run check` を使用する。
 
-各プリセット：
+## キーボードショートカット
 
-- 初期配置生成アルゴリズム
-- カラーパレット（背景、死細胞、生細胞、フェード色）
-- シミュレーション速度、ズームパラメータ
+- `Space`: 再生/停止
+- `F`: フルスクリーン
+- `R`: リセット
+- `T`: テーマ切替
+- `[` / `]`: 速度調整
 
-### セル描画表現
+## コミット規約
 
-- 角を丸める、生死遷移のフェードアニメーション
-- 生存世代数に応じた色変化
-- 疑似パララックス表現（任意）
-
-## パフォーマンス要件
-
-- **目標**: PC全画面で60fps前後
-- スマホではフレームレート/グリッドサイズ自動調整
-- ウィンドウ非アクティブ時は更新間隔を落とす or 一時停止
-- デバイスピクセル比対応
-- セル描画の最適化（Sprite vs Graphics vs Mesh検討）
-
-## GitHub Pages デプロイ
-
-### 想定フロー
-
-- `main`ブランチへのpush/PRマージ
-- GitHub Actionsで自動ビルド
-- `gh-pages`ブランチまたは`main`の`docs/`へデプロイ
-
-### Vite設定
-
-- `base`設定でGitHub Pagesの公開パス対応（`https://<user>.github.io/<repo>/`）
-
-### GitHub Actions構成案
-
-- `.github/workflows/deploy.yml`
-- 使用Action: `actions/checkout`, `actions/setup-node`, `peaceiris/actions-gh-pages`
-- キャッシュ戦略（`node_modules`）
-- ステップ: checkout → install → build → deploy
-
-## 開発時の注意点
-
-### コード品質
-
-- TypeScript strict設定を維持
-- ESLint / Prettier導入（Svelte用プラグイン含む）
-- ライフゲームロジックのユニットテスト必須
-- CI（GitHub Actions）で型エラー、Lintチェック
-
-### "癒やし"体験を壊さないために
-
-- UIはうるさすぎない、控えめなデザイン
-- アニメーション遷移は穏やか
-- パフォーマンス低下による体験破綻を避ける
-- コントラスト比、色覚多様性への配慮
-
-### 拡張性
-
-- プリセット追加しやすい構造
-- 音声機能、ギャラリー機能追加の余地
-- 将来的にWebWorker移行可能な設計
-
-## 優先度付けの基本方針
-
-1. **MVP（最優先）**
-   - ライフゲームロジック
-   - PixiJS描画
-   - 基本的な観賞モード（再生/停止・速度変更・ランダムシード）
-
-2. **初期リリース**
-   - プリセット（Forest/Ocean/Nebula等）
-   - Zenモード・UI最小構成
-   - レスポンシブ対応
-
-3. **拡張機能**
-   - 生態系メモ
-   - 観察ノート
-   - サウンド
-
-4. **品質向上**
-   - テスト整備
-   - ドキュメント
-   - パフォーマンスチューニング
+```
+phase<N>: <タスクID> <簡潔な説明>
+```
 
 ## 参考ドキュメント
 
-- 要件定義: `docs/requirements-document.md`
-- 技術選定・実装方針: `docs/architectural-decision.md`
-- タスク管理指示: `docs/instructions.md`
+- 設計書: `docs/generative-literature-design.md`
+- タスク管理: `docs/generative-literature-tasks.md`
 
 ## その他注意事項
 
+- WebGPU 必須（フォールバックなし）
 - バックエンドなし、静的ホスティング前提
-- セキュリティリスク（XSS等）への配慮
-- アクセシビリティ（キーボード操作、色覚多様性）
-- レスポンシブ対応（PC・タブレット・スマホ）
+- `.wgsl` シェーダーは `?raw` import で読み込み
+- MSDFアトラスは `*.png?url` / `*.json?url` で import
