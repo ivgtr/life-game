@@ -10,6 +10,34 @@ export interface TextSequence {
   direction: 'horizontal' | 'vertical'
 }
 
+/**
+ * kuromoji で有意な解析ができるひらがなか判定。
+ * 常用範囲 あ(U+3042)〜ん(U+3093) から以下を除外:
+ * - 小文字かな: ぁぃぅぇぉっゃゅょゎ（単独で意味を持たない）
+ * - 古語かな: ゐ(U+3090) ゑ(U+3091)（現代語辞書でノイズになる）
+ */
+const SMALL_KANA = new Set([
+  0x3041, // ぁ
+  0x3043, // ぃ
+  0x3045, // ぅ
+  0x3047, // ぇ
+  0x3049, // ぉ
+  0x3063, // っ
+  0x3083, // ゃ
+  0x3085, // ゅ
+  0x3087, // ょ
+  0x308e, // ゎ
+])
+const ARCHAIC_KANA = new Set([
+  0x3090, // ゐ
+  0x3091, // ゑ
+])
+function isUsableHiragana(cp: number): boolean {
+  if (cp < 0x3042 || cp > 0x3093) return false
+  if (SMALL_KANA.has(cp) || ARCHAIC_KANA.has(cp)) return false
+  return true
+}
+
 /** セルデータからテキストシーケンスを抽出する */
 export function scanGrid(
   data: ArrayBuffer,
@@ -29,7 +57,7 @@ export function scanGrid(
       const genFlags = view.getUint32(offset + 4, true)
       const generation = (genFlags & 0xFFFF) - 32768
 
-      if (codepoint > 0 && generation > 0) {
+      if (generation > 0 && isUsableHiragana(codepoint)) {
         const char = String.fromCodePoint(codepoint)
         if (!current) {
           current = { text: '', cells: [], direction: 'horizontal' }
@@ -59,7 +87,7 @@ export function scanGrid(
       const genFlags = view.getUint32(offset + 4, true)
       const generation = (genFlags & 0xFFFF) - 32768
 
-      if (codepoint > 0 && generation > 0) {
+      if (generation > 0 && isUsableHiragana(codepoint)) {
         const char = String.fromCodePoint(codepoint)
         if (!current) {
           current = { text: '', cells: [], direction: 'vertical' }

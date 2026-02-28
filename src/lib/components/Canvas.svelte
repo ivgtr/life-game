@@ -6,8 +6,8 @@
   import { RenderPipeline, type ThemeColors, type ViewportState } from '$lib/gpu/RenderPipeline'
   import { MSDFAtlasManager } from '$lib/font/MSDFAtlasManager'
   import { generateRandomSeed } from '$lib/features/seed/RandomSeed'
-  import { WordDetector } from '$lib/features/detection/WordDetector'
-  import type { DetectedWord } from '$lib/features/detection/types'
+  import { PhraseDetector } from '$lib/features/detection/PhraseDetector'
+  import type { DetectedPhrase } from '$lib/features/detection/types'
   import { CellFlags } from '$lib/types/cell'
 
   interface Props {
@@ -24,7 +24,7 @@
     onReady?: () => void
     onError?: (msg: string) => void
     onStep?: (step: number) => void
-    onWordsDetected?: (words: DetectedWord[]) => void
+    onPhrasesDetected?: (phrases: DetectedPhrase[]) => void
   }
 
   const {
@@ -46,7 +46,7 @@
     onReady,
     onError,
     onStep,
-    onWordsDetected,
+    onPhrasesDetected,
   }: Props = $props()
 
   let canvas: HTMLCanvasElement
@@ -61,8 +61,8 @@
   let lastStepTime = 0
   let lastScanStep = 0
 
-  // 意味検出
-  let detector: WordDetector | null = null
+  // フレーズ検出
+  let detector: PhraseDetector | null = null
 
   // ビューポート
   let viewport: ViewportState = { x: 0, y: 0, scale: 1.0 }
@@ -133,15 +133,15 @@
     }
   }
 
-  /** 検出された単語のセルにハイライトフラグを設定 */
-  function applyHighlights(words: DetectedWord[]): void {
+  /** 検出されたフレーズのセルにハイライトフラグを設定 */
+  function applyHighlights(phrases: DetectedPhrase[]): void {
     if (!buffers || !device) return
 
     const cellCount = gridWidth * gridHeight
     const highlightIndices: number[] = []
 
-    for (const word of words) {
-      for (const cell of word.cells) {
+    for (const phrase of phrases) {
+      for (const cell of phrase.cells) {
         const idx = cell.row * gridWidth + cell.col
         if (idx >= 0 && idx < cellCount) {
           highlightIndices.push(idx)
@@ -199,11 +199,11 @@
     computePipeline = new ComputePipeline(device, buffers)
     renderPipeline = new RenderPipeline(device, buffers, atlas, format)
 
-    // Word detector
-    detector = new WordDetector()
-    detector.setOnDetect((words) => {
-      applyHighlights(words)
-      onWordsDetected?.(words)
+    // Phrase detector
+    detector = new PhraseDetector()
+    detector.setOnDetect((phrases) => {
+      applyHighlights(phrases)
+      onPhrasesDetected?.(phrases)
     })
 
     // ビューポートを中央配置

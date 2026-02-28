@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import Canvas from '$lib/components/Canvas.svelte'
   import ControlBar from '$lib/components/ControlBar.svelte'
-  import WordLog from '$lib/components/WordLog.svelte'
+  import Danmaku from '$lib/components/Danmaku.svelte'
   import FallbackMessage from '$lib/components/FallbackMessage.svelte'
   import { allThemes } from '$lib/features/themes/presets'
   import { aozoraTexts } from '$lib/features/seed/AozoraSeed'
@@ -10,11 +10,10 @@
   import { generateAozoraSeed } from '$lib/features/seed/AozoraSeed'
   import { generateTextSeed } from '$lib/features/seed/TextSeed'
   import { codepointRule } from '$lib/features/automaton/rules/CodepointRule'
-  import type { DetectedWord } from '$lib/features/detection/types'
+  import type { DetectedPhrase } from '$lib/features/detection/types'
 
   const GRID_WIDTH = 256
   const GRID_HEIGHT = 256
-  const MAX_WORD_LOG = 50
 
   let error = $state('')
   let ready = $state(false)
@@ -23,10 +22,10 @@
   let speed = $state(10)
   let stepCount = $state(0)
   let themeIndex = $state(0)
-  let detectedWords = $state<DetectedWord[]>([])
 
   let canvasRef: Canvas | undefined = $state()
   let containerRef: HTMLDivElement | undefined = $state()
+  let danmakuRef: Danmaku | undefined = $state()
 
   const currentTheme = $derived(allThemes[themeIndex]!)
   const rule = codepointRule
@@ -45,29 +44,27 @@
 
   function handleReset(): void {
     canvasRef?.reset()
-    detectedWords = []
   }
 
   function handleSeedRandom(): void {
     const data = generateRandomSeed(GRID_WIDTH, GRID_HEIGHT)
     canvasRef?.setCellData(data)
-    detectedWords = []
   }
 
   function handleSeedAozora(id: string): void {
     const data = generateAozoraSeed(GRID_WIDTH, GRID_HEIGHT, id)
     canvasRef?.setCellData(data)
-    detectedWords = []
   }
 
   function handleSeedCustom(text: string): void {
     const data = generateTextSeed(GRID_WIDTH, GRID_HEIGHT, text)
     canvasRef?.setCellData(data)
-    detectedWords = []
   }
 
-  function handleWordsDetected(words: DetectedWord[]): void {
-    detectedWords = [...words, ...detectedWords].slice(0, MAX_WORD_LOG)
+  function handlePhrasesDetected(phrases: DetectedPhrase[]): void {
+    for (const p of phrases) {
+      danmakuRef?.add(p.word)
+    }
   }
 
   function handleReady(): void {
@@ -155,11 +152,11 @@
       onReady={handleReady}
       onError={handleError}
       onStep={(s) => (stepCount = s)}
-      onWordsDetected={handleWordsDetected}
+      onPhrasesDetected={handlePhrasesDetected}
     />
 
     {#if ready}
-      <WordLog words={detectedWords} />
+      <Danmaku bind:this={danmakuRef} />
       <ControlBar
         {isPlaying}
         {speed}

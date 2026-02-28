@@ -1,33 +1,34 @@
-import type { DetectedWord, DetectionRequest, DetectionResponse } from './types'
+import type { DetectedPhrase, ScanRequest, ScanResponse } from './types'
 import DetectionWorker from './detection.worker?worker'
 
-/** 意味検出の管理クラス */
-export class WordDetector {
+/** フレーズ検出の管理クラス */
+export class PhraseDetector {
   private worker: Worker
   private scanning = false
-  private onDetect: ((words: DetectedWord[]) => void) | null = null
+  private onDetect: ((phrases: DetectedPhrase[]) => void) | null = null
 
   constructor() {
     this.worker = new DetectionWorker()
-    this.worker.onmessage = (e: MessageEvent<DetectionResponse>) => {
+    this.worker.onmessage = (e: MessageEvent<ScanResponse>) => {
+      if (e.data.type === 'ready') return
       this.scanning = false
-      if (e.data.words.length > 0) {
-        this.onDetect?.(e.data.words)
+      if (e.data.phrases.length > 0) {
+        this.onDetect?.(e.data.phrases)
       }
     }
   }
 
   /** 検出コールバックを設定 */
-  setOnDetect(callback: (words: DetectedWord[]) => void): void {
+  setOnDetect(callback: (phrases: DetectedPhrase[]) => void): void {
     this.onDetect = callback
   }
 
-  /** グリッドをスキャンして単語を検出（非同期） */
+  /** グリッドをスキャンしてフレーズを検出（非同期） */
   scan(cellData: ArrayBuffer, width: number, height: number, generation: number): void {
     if (this.scanning) return
 
     this.scanning = true
-    const message: DetectionRequest = {
+    const message: ScanRequest = {
       type: 'scan',
       cellData,
       width,
