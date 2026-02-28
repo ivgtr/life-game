@@ -5,7 +5,7 @@ import { randomKana } from '$lib/features/automaton/CharacterSet'
 export function generateRandomSeed(
   width: number,
   height: number,
-  density = 0.3,
+  density = 0.2,
 ): ArrayBuffer {
   const count = width * height
   const buf = new ArrayBuffer(count * CELL_BYTE_SIZE)
