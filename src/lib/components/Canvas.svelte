@@ -17,6 +17,8 @@
     speed?: number
     mutationStrength?: number
     decaySteps?: number
+    maxAge?: number
+    spontaneousRate?: number
     theme?: ThemeColors
     scanInterval?: number
     onReady?: () => void
@@ -32,6 +34,8 @@
     speed = 10,
     mutationStrength = 0.5,
     decaySteps = 5,
+    maxAge = 80,
+    spontaneousRate = 0.001,
     theme = {
       bg: [0.04, 0.04, 0.04, 1.0],
       alive: [0.3, 0.9, 0.4, 1.0],
@@ -189,7 +193,7 @@
     // Buffers
     buffers = new BufferManager(device, { width: gridWidth, height: gridHeight })
     buffers.writeCells(generateRandomSeed(gridWidth, gridHeight))
-    buffers.writeUniforms(0, mutationStrength, decaySteps, Math.floor(Math.random() * 0xFFFFFF))
+    buffers.writeUniforms(0, mutationStrength, decaySteps, Math.floor(Math.random() * 0xFFFFFF), maxAge, spontaneousRate)
 
     // Pipelines
     computePipeline = new ComputePipeline(device, buffers)
@@ -226,7 +230,7 @@
       if (isPlaying && now - lastStepTime >= stepInterval) {
         lastStepTime = now
         stepCount++
-        buffers.writeUniforms(stepCount, mutationStrength, decaySteps, Math.floor(Math.random() * 0xFFFFFF))
+        buffers.writeUniforms(stepCount, mutationStrength, decaySteps, Math.floor(Math.random() * 0xFFFFFF), maxAge, spontaneousRate)
 
         const encoder = device.createCommandEncoder()
         computePipeline.encode(encoder, pingPong)

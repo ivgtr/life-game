@@ -149,6 +149,8 @@
       {speed}
       mutationStrength={rule.mutationStrength}
       decaySteps={rule.decaySteps}
+      maxAge={rule.maxAge}
+      spontaneousRate={rule.spontaneousRate}
       theme={currentTheme.colors}
       onReady={handleReady}
       onError={handleError}

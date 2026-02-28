@@ -1,5 +1,5 @@
 // セルオートマトン Compute Shader
-// Conway B3/S23 + コードポイント変異 + 文字崩壊
+// HighLife B36/S23 + コードポイント変異 + 文字崩壊 + 寿命 + 自然発生
 
 struct Cell {
   codepoint: u32,
@@ -15,6 +15,8 @@ struct Params {
   mutation_strength: f32,
   decay_steps: u32,
   seed: u32,
+  max_age: u32,
+  spontaneous_rate: f32,
 }
 
 @group(0) @binding(0) var<storage, read> cells_in: array<Cell>;
@@ -24,9 +26,11 @@ struct Params {
 // ひらがな範囲
 const HIRAGANA_START: u32 = 0x3041u; // ぁ
 const HIRAGANA_END: u32 = 0x3096u;   // ゖ
+const HIRAGANA_COUNT: u32 = 86u;
 // カタカナ範囲
 const KATAKANA_START: u32 = 0x30A1u; // ァ
 const KATAKANA_END: u32 = 0x30F6u;   // ヶ
+const KATAKANA_COUNT: u32 = 86u;
 
 fn get_generation(cell: Cell) -> i32 {
   return i32(cell.gen_flags & 0xFFFFu) - 32768i;
@@ -68,6 +72,17 @@ fn random_float(seed_val: u32) -> f32 {
   return f32(hash(seed_val) & 0x00FFFFFFu) / f32(0x01000000u);
 }
 
+// ランダムなひらがな/カタカナのコードポイントを返す
+fn random_kana(seed_val: u32) -> u32 {
+  let h = hash(seed_val);
+  let total = HIRAGANA_COUNT + KATAKANA_COUNT;
+  let pick = h % total;
+  if pick < HIRAGANA_COUNT {
+    return HIRAGANA_START + pick;
+  }
+  return KATAKANA_START + (pick - HIRAGANA_COUNT);
+}
+
 // コードポイントを有効な日本語文字にクランプ
 fn clamp_to_valid_char(cp: u32) -> u32 {
   // ひらがな範囲内ならそのまま
@@ -83,7 +98,6 @@ fn clamp_to_valid_char(cp: u32) -> u32 {
     return HIRAGANA_START;
   }
   if cp > HIRAGANA_END && cp < KATAKANA_START {
-    // ひらがなとカタカナの間 → 近い方に
     let dist_h = cp - HIRAGANA_END;
     let dist_k = KATAKANA_START - cp;
     if dist_h <= dist_k { return HIRAGANA_END; }
@@ -112,7 +126,6 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   // 隣接生セルをカウント + コードポイント収集
   var alive_count: u32 = 0u;
   var cp_sum: u32 = 0u;
-  var neighbor_cps: array<u32, 8>;
 
   for (var dy: i32 = -1i; dy <= 1i; dy = dy + 1i) {
     for (var dx: i32 = -1i; dx <= 1i; dx = dx + 1i) {
@@ -124,7 +137,6 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       let neighbor = cells_in[idx(nx, ny)];
 
       if is_alive(neighbor) {
-        neighbor_cps[alive_count] = neighbor.codepoint;
         alive_count = alive_count + 1u;
         cp_sum = cp_sum + neighbor.codepoint;
       }
@@ -134,29 +146,47 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   var out: Cell;
 
   if is_alive(current) {
-    // 生セル
-    if alive_count < 2u || alive_count > 3u {
+    // === 生セル ===
+
+    // 寿命チェック: max_age に達したら死亡開始
+    if params.max_age > 0u && u32(gen) >= params.max_age {
+      let decay_gen = -i32(params.decay_steps);
+      out = Cell(current.codepoint, pack_gen_flags(decay_gen, flags | 0x0002u));
+    }
+    // HighLife B36/S23: 生存は2-3隣接
+    else if alive_count < 2u || alive_count > 3u {
       // 死亡開始 → 崩壊プロセス
       let decay_gen = -i32(params.decay_steps);
       out = Cell(current.codepoint, pack_gen_flags(decay_gen, flags | 0x0002u));
     } else {
       // 生存 → 変異
-      let stability = min(f32(gen) / 20.0, 1.0); // 長寿ほど安定
-      let rng = random_float(hash(i) ^ params.tick ^ params.seed);
+      let stability = min(f32(gen) / 20.0, 1.0);
+      let rng = random_float(hash(i * 3u + 1u) ^ params.tick ^ params.seed);
 
       var new_cp = current.codepoint;
       if alive_count > 0u && rng > stability * (1.0 - params.mutation_strength) {
         // 隣接セルのコードポイント平均 + ドリフト
         let avg = cp_sum / alive_count;
         let drift_seed = hash(i * 31u + params.tick * 7u + params.seed);
-        let drift = i32(drift_seed % 5u) - 2i;
-        new_cp = clamp_to_valid_char(u32(i32(avg) + drift));
+        let drift = i32(drift_seed % 11u) - 5i; // ±5 の広いドリフト
+        new_cp = clamp_to_valid_char(u32(max(0i, i32(avg) + drift)));
+
+        // たまにひらがな⇔カタカナをジャンプ
+        let jump_rng = random_float(hash(i * 13u + 3u) ^ params.tick);
+        if jump_rng < 0.05 {
+          if new_cp >= HIRAGANA_START && new_cp <= HIRAGANA_END {
+            new_cp = new_cp - HIRAGANA_START + KATAKANA_START;
+          } else if new_cp >= KATAKANA_START && new_cp <= KATAKANA_END {
+            new_cp = new_cp - KATAKANA_START + HIRAGANA_START;
+          }
+          new_cp = clamp_to_valid_char(new_cp);
+        }
       }
 
       out = Cell(new_cp, pack_gen_flags(gen + 1i, flags & ~0x0002u));
     }
   } else if is_decaying(current) {
-    // 崩壊中
+    // === 崩壊中 ===
     let new_gen = gen + 1i;
     if new_gen >= 0i {
       // 完全死亡
@@ -165,14 +195,30 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       out = Cell(current.codepoint, pack_gen_flags(new_gen, flags | 0x0002u));
     }
   } else {
-    // 死セル
-    if alive_count == 3u {
-      // 誕生: 3つの隣接セルのコードポイントから新文字決定
-      let avg_cp = cp_sum / 3u;
-      let birth_seed = hash(i * 17u + params.tick * 13u + params.seed);
-      let drift = i32(birth_seed % 3u) - 1i;
-      let new_cp = clamp_to_valid_char(u32(i32(avg_cp) + drift));
+    // === 死セル ===
+
+    // HighLife B36/S23: 誕生は3隣接 OR 6隣接
+    if alive_count == 3u || alive_count == 6u {
+      var new_cp: u32;
+      if alive_count > 0u {
+        let avg_cp = cp_sum / alive_count;
+        let birth_seed = hash(i * 17u + params.tick * 13u + params.seed);
+        let drift = i32(birth_seed % 7u) - 3i;
+        new_cp = clamp_to_valid_char(u32(max(0i, i32(avg_cp) + drift)));
+      } else {
+        new_cp = random_kana(hash(i) ^ params.tick ^ params.seed);
+      }
       out = Cell(new_cp, pack_gen_flags(1i, 0u));
+    }
+    // 自然発生: 低確率でランダムに生命が湧く
+    else if params.spontaneous_rate > 0.0 {
+      let sp_rng = random_float(hash(i * 97u + 5u) ^ params.tick ^ params.seed);
+      if sp_rng < params.spontaneous_rate {
+        let sp_cp = random_kana(hash(i * 41u + params.tick * 3u) ^ params.seed);
+        out = Cell(sp_cp, pack_gen_flags(1i, 0u));
+      } else {
+        out = Cell(0u, pack_gen_flags(0i, 0u));
+      }
     } else {
       out = Cell(0u, pack_gen_flags(0i, 0u));
     }

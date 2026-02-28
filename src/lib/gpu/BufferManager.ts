@@ -54,7 +54,14 @@ export class BufferManager {
   }
 
   /** uniform パラメータを更新 */
-  writeUniforms(tick: number, mutationStrength: number, decaySteps: number, seed: number): void {
+  writeUniforms(
+    tick: number,
+    mutationStrength: number,
+    decaySteps: number,
+    seed: number,
+    maxAge = 80,
+    spontaneousRate = 0.001,
+  ): void {
     const data = new ArrayBuffer(32)
     const view = new DataView(data)
     view.setUint32(0, this.gridParams.width, true)
@@ -63,6 +70,8 @@ export class BufferManager {
     view.setFloat32(12, mutationStrength, true)
     view.setUint32(16, decaySteps, true)
     view.setUint32(20, seed, true)
+    view.setUint32(24, maxAge, true)
+    view.setFloat32(28, spontaneousRate, true)
     this.device.queue.writeBuffer(this.uniformBuffer, 0, data)
   }
 
