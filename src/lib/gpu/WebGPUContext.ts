@@ -1,14 +1,8 @@
-/**
- * WebGPU コンテキスト管理
- *
- * GPU デバイスの初期化・管理を担当する。
- * Phase 1 で実装を完成させる。
- */
-
 /** WebGPU 初期化結果 */
 export interface WebGPUContextResult {
   readonly device: GPUDevice
   readonly adapter: GPUAdapter
+  readonly format: GPUTextureFormat
   onDeviceLost(callback: (info: GPUDeviceLostInfo) => void): void
 }
 
@@ -23,11 +17,51 @@ export type WebGPUInitResult =
   | { ok: true; value: WebGPUContextResult }
   | { ok: false; error: WebGPUError }
 
-/**
- * WebGPU デバイスを初期化する。
- * 非対応環境ではエラーを返す。
- */
 export async function initWebGPU(): Promise<WebGPUInitResult> {
-  // Phase 1 で実装
-  throw new Error('Not implemented')
+  if (!navigator.gpu) {
+    return {
+      ok: false,
+      error: { kind: 'not-supported', message: 'WebGPU is not supported in this browser' },
+    }
+  }
+
+  const adapter = await navigator.gpu.requestAdapter()
+  if (!adapter) {
+    return {
+      ok: false,
+      error: { kind: 'adapter-unavailable', message: 'No GPU adapter available' },
+    }
+  }
+
+  let device: GPUDevice
+  try {
+    device = await adapter.requestDevice({
+      requiredLimits: {
+        maxStorageBufferBindingSize: 256 * 1024 * 1024, // 256MB
+        maxBufferSize: 256 * 1024 * 1024,
+      },
+    })
+  } catch (e) {
+    return {
+      ok: false,
+      error: {
+        kind: 'device-request-failed',
+        message: 'Failed to request GPU device',
+        cause: e,
+      },
+    }
+  }
+
+  const format = navigator.gpu.getPreferredCanvasFormat()
+
+  const result: WebGPUContextResult = {
+    device,
+    adapter,
+    format,
+    onDeviceLost(callback) {
+      device.lost.then(callback)
+    },
+  }
+
+  return { ok: true, value: result }
 }
