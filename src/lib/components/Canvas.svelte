@@ -6,6 +6,9 @@
   import { RenderPipeline, type ThemeColors, type ViewportState } from '$lib/gpu/RenderPipeline'
   import { MSDFAtlasManager } from '$lib/font/MSDFAtlasManager'
   import { generateRandomSeed } from '$lib/features/seed/RandomSeed'
+  import { WordDetector } from '$lib/features/detection/WordDetector'
+  import type { DetectedWord } from '$lib/features/detection/types'
+  import { CellFlags } from '$lib/types/cell'
 
   interface Props {
     gridWidth?: number
@@ -15,9 +18,11 @@
     mutationStrength?: number
     decaySteps?: number
     theme?: ThemeColors
+    scanInterval?: number
     onReady?: () => void
     onError?: (msg: string) => void
     onStep?: (step: number) => void
+    onWordsDetected?: (words: DetectedWord[]) => void
   }
 
   const {
@@ -33,9 +38,11 @@
       decay: [0.2, 0.5, 0.3, 0.6],
       highlight: [1.0, 0.9, 0.2, 1.0],
     },
+    scanInterval = 10,
     onReady,
     onError,
     onStep,
+    onWordsDetected,
   }: Props = $props()
 
   let canvas: HTMLCanvasElement
@@ -48,6 +55,10 @@
   let stepCount = 0
   let pingPong = 0
   let lastStepTime = 0
+  let lastScanStep = 0
+
+  // 意味検出
+  let detector: WordDetector | null = null
 
   // ビューポート
   let viewport: ViewportState = { x: 0, y: 0, scale: 1.0 }
@@ -71,6 +82,42 @@
       stepCount = 0
       pingPong = 0
       onStep?.(0)
+    }
+  }
+
+  /** 検出された単語のセルにハイライトフラグを設定 */
+  function applyHighlights(words: DetectedWord[]): void {
+    if (!buffers || !device) return
+
+    const cellCount = gridWidth * gridHeight
+    const highlightIndices: number[] = []
+
+    for (const word of words) {
+      for (const cell of word.cells) {
+        const idx = cell.row * gridWidth + cell.col
+        if (idx >= 0 && idx < cellCount) {
+          highlightIndices.push(idx)
+        }
+      }
+    }
+
+    if (highlightIndices.length === 0) return
+
+    // NOTE: ハイライトフラグはCompute Shaderで次のステップで上書きされるため、
+    // 将来的にはCompute Shader側でフラグを保持する仕組みが必要
+    void highlightIndices
+    void CellFlags
+  }
+
+  /** グリッドスキャンを実行 */
+  async function performScan(): Promise<void> {
+    if (!detector || !buffers) return
+
+    try {
+      const cellData = await buffers.readCells()
+      detector.scan(cellData, gridWidth, gridHeight, stepCount)
+    } catch {
+      // readback失敗時は静かにスキップ
     }
   }
 
@@ -103,6 +150,13 @@
     // Pipelines
     computePipeline = new ComputePipeline(device, buffers)
     renderPipeline = new RenderPipeline(device, buffers, atlas, format)
+
+    // Word detector
+    detector = new WordDetector()
+    detector.setOnDetect((words) => {
+      applyHighlights(words)
+      onWordsDetected?.(words)
+    })
 
     // Auto-center viewport
     const cellSize = 16
@@ -139,6 +193,12 @@
         pingPong = 1 - pingPong
         buffers.swap()
         onStep?.(stepCount)
+
+        // 定期的にグリッドスキャン
+        if (stepCount - lastScanStep >= scanInterval) {
+          lastScanStep = stepCount
+          performScan()
+        }
       }
 
       // Render
@@ -157,6 +217,7 @@
 
   onDestroy(() => {
     if (animFrameId) cancelAnimationFrame(animFrameId)
+    detector?.destroy()
     renderPipeline?.destroy()
     buffers?.destroy()
   })

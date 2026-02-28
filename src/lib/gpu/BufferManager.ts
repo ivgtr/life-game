@@ -66,6 +66,29 @@ export class BufferManager {
     this.device.queue.writeBuffer(this.uniformBuffer, 0, data)
   }
 
+  /** 現在のセルバッファをCPUに読み戻す */
+  async readCells(): Promise<ArrayBuffer> {
+    const cellCount = this.gridParams.width * this.gridParams.height
+    const bufferSize = cellCount * CELL_BYTE_SIZE
+
+    const stagingBuffer = this.device.createBuffer({
+      label: 'cell-readback-staging',
+      size: bufferSize,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    })
+
+    const encoder = this.device.createCommandEncoder()
+    encoder.copyBufferToBuffer(this.currentBuffer, 0, stagingBuffer, 0, bufferSize)
+    this.device.queue.submit([encoder.finish()])
+
+    await stagingBuffer.mapAsync(GPUMapMode.READ)
+    const data = stagingBuffer.getMappedRange().slice(0)
+    stagingBuffer.unmap()
+    stagingBuffer.destroy()
+
+    return data
+  }
+
   destroy(): void {
     this.cellBuffers[0].destroy()
     this.cellBuffers[1].destroy()
