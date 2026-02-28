@@ -11,7 +11,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "test": "vitest",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "generate-atlas": "bash scripts/generate-atlas.sh"
   },
   "repository": {
     "type": "git",
@@ -47,6 +48,7 @@
     "eslint-plugin-svelte": "^3.13.0",
     "globals": "^16.5.0",
     "jsdom": "^27.1.0",
+    "msdf-bmfont-xml": "^2.8.0",
     "prettier": "^3.6.2",
     "prettier-plugin-svelte": "^3.4.0",
     "svelte": "^5.39.6",
