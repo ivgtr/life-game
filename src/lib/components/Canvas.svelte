@@ -64,6 +64,50 @@
   let viewport: ViewportState = { x: 0, y: 0, scale: 1.0 }
   let isDragging = false
   let dragStart = { x: 0, y: 0 }
+  const CELL_SIZE = 16
+
+  /** ビューポートをグリッド範囲内にクランプ */
+  function clampViewport(): void {
+    if (!canvas) return
+
+    const worldW = gridWidth * CELL_SIZE
+    const worldH = gridHeight * CELL_SIZE
+
+    // ズーム下限: グリッドが画面を完全に覆う最小スケール
+    const minScale = Math.max(
+      canvas.width / worldW,
+      canvas.height / worldH,
+    )
+    viewport.scale = Math.max(viewport.scale, minScale)
+
+    // 可視範囲（ワールド座標）
+    const visibleW = canvas.width / viewport.scale
+    const visibleH = canvas.height / viewport.scale
+
+    // パン範囲をクランプ: グリッドの外が見えないようにする
+    viewport.x = Math.max(0, Math.min(viewport.x, worldW - visibleW))
+    viewport.y = Math.max(0, Math.min(viewport.y, worldH - visibleH))
+  }
+
+  /** ビューポートをグリッド中央にセンタリング */
+  function centerViewport(): void {
+    if (!canvas) return
+
+    const worldW = gridWidth * CELL_SIZE
+    const worldH = gridHeight * CELL_SIZE
+
+    // 画面を覆うスケール（Math.max でグリッドが画面をフィル）
+    viewport.scale = Math.max(
+      canvas.width / worldW,
+      canvas.height / worldH,
+    )
+
+    // 中央配置
+    const visibleW = canvas.width / viewport.scale
+    const visibleH = canvas.height / viewport.scale
+    viewport.x = (worldW - visibleW) / 2
+    viewport.y = (worldH - visibleH) / 2
+  }
 
   /** 外部からセルデータを設定 */
   export function setCellData(data: ArrayBuffer): void {
@@ -158,12 +202,8 @@
       onWordsDetected?.(words)
     })
 
-    // Auto-center viewport
-    const cellSize = 16
-    viewport.scale = Math.min(
-      canvas.width / (gridWidth * cellSize),
-      canvas.height / (gridHeight * cellSize),
-    )
+    // ビューポートを中央配置
+    centerViewport()
 
     onReady?.()
 
@@ -173,6 +213,7 @@
       canvas.width = canvas.clientWidth * dpr
       canvas.height = canvas.clientHeight * dpr
       context.configure({ device, format, alphaMode: 'premultiplied' })
+      clampViewport()
     })
     observer.observe(canvas)
 
@@ -203,9 +244,8 @@
 
       // Render
       const textureView = context.getCurrentTexture().createView()
-      const cellSize = 16
       renderPipeline.setPingPong(pingPong)
-      renderPipeline.updateUniforms(canvas.width, canvas.height, cellSize, viewport, theme)
+      renderPipeline.updateUniforms(canvas.width, canvas.height, CELL_SIZE, viewport, theme)
 
       const encoder = device.createCommandEncoder()
       renderPipeline.encode(encoder, textureView, theme)
@@ -225,8 +265,21 @@
   // Mouse events for pan/zoom
   function onWheel(e: WheelEvent): void {
     e.preventDefault()
+
+    // ズーム前のカーソル位置をワールド座標で記録（カーソル中心ズーム）
+    const dpr = window.devicePixelRatio || 1
+    const cursorScreenX = e.offsetX * dpr
+    const cursorScreenY = e.offsetY * dpr
+    const worldX = viewport.x + cursorScreenX / viewport.scale
+    const worldY = viewport.y + cursorScreenY / viewport.scale
+
     const factor = e.deltaY > 0 ? 0.9 : 1.1
     viewport.scale *= factor
+
+    // カーソル位置を基準にビューポートを調整
+    viewport.x = worldX - cursorScreenX / viewport.scale
+    viewport.y = worldY - cursorScreenY / viewport.scale
+    clampViewport()
   }
 
   function onPointerDown(e: PointerEvent): void {
@@ -243,6 +296,7 @@
     viewport.x -= dx * dpr / viewport.scale
     viewport.y -= dy * dpr / viewport.scale
     dragStart = { x: e.clientX, y: e.clientY }
+    clampViewport()
   }
 
   function onPointerUp(): void {
